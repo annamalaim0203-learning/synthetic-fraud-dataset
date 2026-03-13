@@ -333,7 +333,7 @@ st.pyplot(fig)
 # SHAP EXPLAINABILITY
 # --------------------------------------------------
 
-st.subheader("Explainable AI – SHAP Feature Impact")
+st.subheader("")
 
 if model_name in ["Random Forest", "Decision Tree", "XGBoost"]:
 
@@ -358,4 +358,5 @@ if model_name in ["Random Forest", "Decision Tree", "XGBoost"]:
 else:
 
     st.info("SHAP explanation is best supported for tree-based models.")
+
 
