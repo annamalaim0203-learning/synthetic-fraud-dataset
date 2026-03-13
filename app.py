@@ -303,27 +303,38 @@ else:
 
 
 # --------------------------------------------------
-# METRICS
+# METRICS (robust for small datasets)
 # --------------------------------------------------
 
 accuracy = accuracy_score(y_test, y_pred)
-precision = precision_score(y_test, y_pred)
-recall = recall_score(y_test, y_pred)
-f1 = f1_score(y_test, y_pred)
-auc = roc_auc_score(y_test, y_prob)
-mcc = matthews_corrcoef(y_test, y_pred)
 
-st.subheader("📊 Model Performance")
+try:
+    precision = precision_score(y_test, y_pred, zero_division=0)
+except:
+    precision = 0
 
-c1, c2, c3 = st.columns(3)
+try:
+    recall = recall_score(y_test, y_pred, zero_division=0)
+except:
+    recall = 0
 
-c1.metric("Accuracy", round(accuracy,4))
-c2.metric("Precision", round(precision,4))
-c3.metric("F1 Score", round(f1,4))
+try:
+    f1 = f1_score(y_test, y_pred, zero_division=0)
+except:
+    f1 = 0
 
-c1.metric("AUC", round(auc,4))
-c2.metric("Recall", round(recall,4))
-c3.metric("MCC", round(mcc,4))
+try:
+    if len(np.unique(y_test)) > 1:
+        auc = roc_auc_score(y_test, y_prob)
+    else:
+        auc = 0
+except:
+    auc = 0
+
+try:
+    mcc = matthews_corrcoef(y_test, y_pred)
+except:
+    mcc = 0
 
 
 # --------------------------------------------------
@@ -370,6 +381,7 @@ if model_name in ["Random Forest", "Decision Tree", "XGBoost"]:
 else:
 
     st.info("SHAP explanation is best supported for tree-based models.")
+
 
 
 
