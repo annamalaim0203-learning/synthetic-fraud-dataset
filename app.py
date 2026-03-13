@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import requests
+import shap
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -24,198 +25,326 @@ from xgboost import XGBClassifier
 # --------------------------------------------------
 # PAGE CONFIG
 # --------------------------------------------------
+
 st.set_page_config(page_title="Fraud Detection Dashboard", layout="wide")
 
-# --------------------------------------------------
-# HEADER
-# --------------------------------------------------
 st.title("💳 Synthetic Fraud Detection Dashboard")
-st.markdown("### Annamalai M – 2025aa05509 – ML Assignment 2")
+st.markdown("### Fraud Detection with Explainable AI (SHAP)")
+
 
 # --------------------------------------------------
-# DATASET DOWNLOAD FROM GITHUB
+# DATASET DOWNLOAD
 # --------------------------------------------------
-st.subheader("🐙 Dataset Access – GitHub Repository")
 
-GITHUB_RAW_URL = (
-    "https://raw.githubusercontent.com/"
-    "annamalaim0203-learning/synthetic-fraud-dataset/"
-    "main/synthetic_fraud_dataset.csv"
+st.subheader("🐙 Dataset Access – GitHub")
+
+GITHUB_RAW_URL = "https://raw.githubusercontent.com/annamalaim0203-learning/synthetic-fraud-dataset/main/synthetic_fraud_dataset.csv"
+
+response = requests.get(GITHUB_RAW_URL)
+
+st.download_button(
+    label="Download Fraud Dataset",
+    data=response.content,
+    file_name="synthetic_fraud_dataset.csv",
+    mime="text/csv"
 )
 
-try:
-    response = requests.get(GITHUB_RAW_URL)
-    response.raise_for_status()
-
-    st.download_button(
-        label="Download Fraud Dataset",
-        data=response.content,
-        file_name="synthetic_fraud_dataset.csv",
-        mime="text/csv"
-    )
-
-    st.caption(
-        "Dataset is fetched directly from the GitHub repository "
-        "and made available for download."
-    )
-
-except Exception as e:
-    st.error("Unable to fetch dataset from GitHub.")
-    st.stop()
-
 st.markdown("---")
+
 
 # --------------------------------------------------
 # SIDEBAR CONTROLS
 # --------------------------------------------------
-st.sidebar.header("⚙️ Controls")
+
+st.sidebar.header("Controls")
 
 uploaded_file = st.sidebar.file_uploader(
-    "Upload Fraud Dataset CSV",
+    "Upload Fraud Dataset",
     type=["csv"]
 )
 
+model_name = st.sidebar.selectbox(
+    "Select Model",
+    [
+        "Logistic Regression",
+        "Decision Tree",
+        "KNN",
+        "Naive Bayes",
+        "Random Forest",
+        "XGBoost"
+    ]
+)
+
 if uploaded_file is None:
-    st.info(
-        "Please download the dataset using the button above "
-        "or upload synthetic_fraud_dataset.csv to continue."
-    )
+    st.info("Upload dataset to continue.")
     st.stop()
 
 df = pd.read_csv(uploaded_file)
 
-# --------------------------------------------------
-# DATASET PREVIEW
-# --------------------------------------------------
-st.subheader("📂 Dataset Overview")
 
-summary_df = pd.DataFrame({
-    "Attribute": ["Number of Rows", "Number of Columns", "Target Column"],
+# --------------------------------------------------
+# DATASET OVERVIEW
+# --------------------------------------------------
+
+st.subheader("Dataset Overview")
+
+summary = pd.DataFrame({
+    "Attribute": ["Rows", "Columns", "Target"],
     "Value": [df.shape[0], df.shape[1], "is_fraud"]
 })
 
-st.markdown("#### Dataset Summary")
-st.table(summary_df)
+st.table(summary)
 
-features_df = pd.DataFrame({
-    "Feature No.": range(1, len(df.columns) + 1),
-    "Feature Name": df.columns
-})
+st.write("Sample Records")
+st.dataframe(df.head())
 
-st.markdown("#### Feature List")
-st.table(features_df)
 
-st.markdown("#### Sample Records (First 5 Rows)")
-st.dataframe(df.head(), use_container_width=True)
+# --------------------------------------------------
+# MODEL EXPLANATION SECTION
+# --------------------------------------------------
 
 st.markdown("---")
+st.subheader("📘 Model Explanation")
+
+model_explanations = {
+
+"Logistic Regression": {
+"definition":
+"Logistic Regression predicts the probability of a binary outcome such as fraud or non-fraud.",
+
+"use_case":
+"Used in credit risk prediction, fraud detection, and medical diagnosis.",
+
+"analogy":
+"Like a bank analyst estimating the probability that a transaction is suspicious based on several risk factors.",
+
+"fraud_use":
+"It helps estimate the probability that a transaction is fraudulent."
+},
+
+"Decision Tree": {
+"definition":
+"A Decision Tree splits data into branches based on conditions until a final classification is reached.",
+
+"use_case":
+"Used in loan approval systems and risk assessment.",
+
+"analogy":
+"Like a flowchart used by banks to approve or reject transactions.",
+
+"fraud_use":
+"It helps detect fraud by applying sequential rules on transaction attributes."
+},
+
+"KNN": {
+"definition":
+"K-Nearest Neighbors classifies a transaction based on similar past transactions.",
+
+"use_case":
+"Used in recommendation systems and anomaly detection.",
+
+"analogy":
+"Like asking nearby customers whether a transaction looks suspicious.",
+
+"fraud_use":
+"It detects fraud by comparing a transaction to similar past transactions."
+},
+
+"Naive Bayes": {
+"definition":
+"Naive Bayes calculates probabilities using Bayes theorem assuming feature independence.",
+
+"use_case":
+"Used in spam detection and document classification.",
+
+"analogy":
+"Like combining clues to estimate the likelihood of fraud.",
+
+"fraud_use":
+"It estimates fraud probability based on independent transaction features."
+},
+
+"Random Forest": {
+"definition":
+"Random Forest combines multiple decision trees and takes a majority vote.",
+
+"use_case":
+"Used in credit scoring and fraud detection.",
+
+"analogy":
+"Like asking multiple bank analysts to evaluate a transaction.",
+
+"fraud_use":
+"It improves fraud detection accuracy using ensemble learning."
+},
+
+"XGBoost": {
+"definition":
+"XGBoost is an advanced boosting algorithm where each tree improves the previous model.",
+
+"use_case":
+"Used in financial risk modeling and fraud detection competitions.",
+
+"analogy":
+"Like repeatedly correcting mistakes to improve fraud detection.",
+
+"fraud_use":
+"It identifies complex fraud patterns in transaction data."
+}
+}
+
+info = model_explanations[model_name]
+
+st.write("**Definition:**", info["definition"])
+st.write("**Use Case:**", info["use_case"])
+st.write("**Simple Analogy:**", info["analogy"])
+st.write("**Application in Fraud Detection:**", info["fraud_use"])
+
 
 # --------------------------------------------------
-# DATA PREPARATION
+# REMOVE LEAKAGE FEATURES
 # --------------------------------------------------
-df = df.drop_duplicates()
 
-# Target variable
-target_column = "is_fraud"
+df = df.drop(columns=[
+    "transaction_id",
+    "user_id",
+    "device_risk_score",
+    "ip_risk_score"
+], errors="ignore")
 
-X = df.drop(target_column, axis=1)
-y = df[target_column]
 
-# One-hot encoding for categorical variables
+# --------------------------------------------------
+# FEATURE ENGINEERING
+# --------------------------------------------------
+
+df["high_amount_flag"] = (df["amount"] > df["amount"].median()).astype(int)
+df["night_transaction"] = ((df["hour"] < 6) | (df["hour"] > 22)).astype(int)
+df["international_transaction"] = (df["country"] != "US").astype(int)
+
+
+# --------------------------------------------------
+# FEATURES / TARGET
+# --------------------------------------------------
+
+target = "is_fraud"
+
+X = df.drop(target, axis=1)
+y = df[target]
+
 X = pd.get_dummies(X, drop_first=True)
 
-# Train test split
+
+# --------------------------------------------------
+# TRAIN TEST SPLIT
+# --------------------------------------------------
+
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y,
+    X,
+    y,
     test_size=0.25,
     random_state=42,
     stratify=y
 )
 
-# Scaling
+
+# --------------------------------------------------
+# SCALING
+# --------------------------------------------------
+
 scaler = StandardScaler()
+
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
+
 # --------------------------------------------------
-# MODELS
+# MODEL SELECTION
 # --------------------------------------------------
+
 models = {
-    "Logistic Regression": LogisticRegression(max_iter=1000),
-    "Decision Tree": DecisionTreeClassifier(max_depth=5, random_state=42),
-    "K-Nearest Neighbors": KNeighborsClassifier(n_neighbors=5),
-    "Naive Bayes": GaussianNB(),
-    "Random Forest": RandomForestClassifier(n_estimators=200, max_depth=8, random_state=42),
-    "XGBoost": XGBClassifier(
-        n_estimators=200,
-        learning_rate=0.05,
-        max_depth=4,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        eval_metric="logloss",
-        random_state=42
-    )
+"Logistic Regression": LogisticRegression(max_iter=1000),
+"Decision Tree": DecisionTreeClassifier(),
+"KNN": KNeighborsClassifier(),
+"Naive Bayes": GaussianNB(),
+"Random Forest": RandomForestClassifier(),
+"XGBoost": XGBClassifier(eval_metric="logloss")
 }
 
-model_name = st.sidebar.selectbox("Select ML Model", list(models.keys()))
 model = models[model_name]
 
+
 # --------------------------------------------------
-# TRAINING
+# TRAIN MODEL
 # --------------------------------------------------
-if model_name in ["Logistic Regression", "K-Nearest Neighbors", "Naive Bayes"]:
+
+if model_name in ["Logistic Regression","KNN","Naive Bayes"]:
+
     model.fit(X_train_scaled, y_train)
     y_pred = model.predict(X_test_scaled)
-    y_prob = model.predict_proba(X_test_scaled)[:, 1]
+    y_prob = model.predict_proba(X_test_scaled)[:,1]
+
 else:
+
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-    y_prob = model.predict_proba(X_test)[:, 1]
+    y_prob = model.predict_proba(X_test)[:,1]
+
 
 # --------------------------------------------------
-# EVALUATION METRICS
+# METRICS
 # --------------------------------------------------
+
+accuracy = accuracy_score(y_test, y_pred)
+precision = precision_score(y_test, y_pred)
+recall = recall_score(y_test, y_pred)
+f1 = f1_score(y_test, y_pred)
+auc = roc_auc_score(y_test, y_prob)
+mcc = matthews_corrcoef(y_test, y_pred)
+
 st.subheader("📊 Model Performance")
 
-metrics = {
-    "Accuracy": accuracy_score(y_test, y_pred),
-    "AUC": roc_auc_score(y_test, y_prob),
-    "Precision": precision_score(y_test, y_pred),
-    "Recall": recall_score(y_test, y_pred),
-    "F1 Score": f1_score(y_test, y_pred),
-    "MCC": matthews_corrcoef(y_test, y_pred)
-}
-
 c1, c2, c3 = st.columns(3)
-items = list(metrics.items())
 
-for col, pair in zip([c1, c2, c3], [items[:2], items[2:4], items[4:]]):
-    with col:
-        for name, val in pair:
-            st.metric(name, round(val, 3))
+c1.metric("Accuracy", round(accuracy,4))
+c2.metric("Precision", round(precision,4))
+c3.metric("F1 Score", round(f1,4))
+
+c1.metric("AUC", round(auc,4))
+c2.metric("Recall", round(recall,4))
+c3.metric("MCC", round(mcc,4))
+
 
 # --------------------------------------------------
 # CONFUSION MATRIX
 # --------------------------------------------------
-st.subheader("🧩 Confusion Matrix")
+
+st.subheader("Confusion Matrix")
 
 cm = confusion_matrix(y_test, y_pred)
 
-fig, ax = plt.subplots(figsize=(4, 3))
-sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+fig, ax = plt.subplots()
 
-ax.set_xlabel("Predicted")
-ax.set_ylabel("Actual")
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
 
 st.pyplot(fig)
 
-# --------------------------------------------------
-# CLASSIFICATION REPORT
-# --------------------------------------------------
-st.subheader("📄 Classification Report")
 
-report_df = pd.DataFrame(
-    classification_report(y_test, y_pred, output_dict=True)
-).transpose()
+# --------------------------------------------------
+# SHAP EXPLAINABILITY
+# --------------------------------------------------
 
-st.dataframe(report_df, use_container_width=True)
+st.subheader("Explainable AI – SHAP Feature Impact")
+
+if model_name in ["Random Forest","Decision Tree","XGBoost"]:
+
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X_test)
+
+    fig_shap = plt.figure()
+    shap.summary_plot(shap_values, X_test, show=False)
+
+    st.pyplot(fig_shap)
+
+else:
+
+    st.info("SHAP explanation is best supported for tree-based models.")
