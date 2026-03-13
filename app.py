@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import (
     accuracy_score, roc_auc_score, precision_score,
     recall_score, f1_score, matthews_corrcoef,
-    confusion_matrix, classification_report
+    confusion_matrix
 )
 
 from sklearn.linear_model import LogisticRegression
@@ -38,9 +38,9 @@ st.markdown("### Fraud Detection with Explainable AI (SHAP)")
 
 st.subheader("🐙 Dataset Access – GitHub")
 
-GITHUB_RAW_URL = "https://raw.githubusercontent.com/annamalaim0203-learning/synthetic-fraud-dataset/main/synthetic_fraud_dataset.csv"
+url = "https://raw.githubusercontent.com/annamalaim0203-learning/synthetic-fraud-dataset/main/synthetic_fraud_dataset.csv"
 
-response = requests.get(GITHUB_RAW_URL)
+response = requests.get(url)
 
 st.download_button(
     label="Download Fraud Dataset",
@@ -53,7 +53,7 @@ st.markdown("---")
 
 
 # --------------------------------------------------
-# SIDEBAR CONTROLS
+# SIDEBAR
 # --------------------------------------------------
 
 st.sidebar.header("Controls")
@@ -100,109 +100,7 @@ st.dataframe(df.head())
 
 
 # --------------------------------------------------
-# MODEL EXPLANATION SECTION
-# --------------------------------------------------
-
-st.markdown("---")
-st.subheader("📘 Model Explanation")
-
-model_explanations = {
-
-"Logistic Regression": {
-"definition":
-"Logistic Regression predicts the probability of a binary outcome such as fraud or non-fraud.",
-
-"use_case":
-"Used in credit risk prediction, fraud detection, and medical diagnosis.",
-
-"analogy":
-"Like a bank analyst estimating the probability that a transaction is suspicious based on several risk factors.",
-
-"fraud_use":
-"It helps estimate the probability that a transaction is fraudulent."
-},
-
-"Decision Tree": {
-"definition":
-"A Decision Tree splits data into branches based on conditions until a final classification is reached.",
-
-"use_case":
-"Used in loan approval systems and risk assessment.",
-
-"analogy":
-"Like a flowchart used by banks to approve or reject transactions.",
-
-"fraud_use":
-"It helps detect fraud by applying sequential rules on transaction attributes."
-},
-
-"KNN": {
-"definition":
-"K-Nearest Neighbors classifies a transaction based on similar past transactions.",
-
-"use_case":
-"Used in recommendation systems and anomaly detection.",
-
-"analogy":
-"Like asking nearby customers whether a transaction looks suspicious.",
-
-"fraud_use":
-"It detects fraud by comparing a transaction to similar past transactions."
-},
-
-"Naive Bayes": {
-"definition":
-"Naive Bayes calculates probabilities using Bayes theorem assuming feature independence.",
-
-"use_case":
-"Used in spam detection and document classification.",
-
-"analogy":
-"Like combining clues to estimate the likelihood of fraud.",
-
-"fraud_use":
-"It estimates fraud probability based on independent transaction features."
-},
-
-"Random Forest": {
-"definition":
-"Random Forest combines multiple decision trees and takes a majority vote.",
-
-"use_case":
-"Used in credit scoring and fraud detection.",
-
-"analogy":
-"Like asking multiple bank analysts to evaluate a transaction.",
-
-"fraud_use":
-"It improves fraud detection accuracy using ensemble learning."
-},
-
-"XGBoost": {
-"definition":
-"XGBoost is an advanced boosting algorithm where each tree improves the previous model.",
-
-"use_case":
-"Used in financial risk modeling and fraud detection competitions.",
-
-"analogy":
-"Like repeatedly correcting mistakes to improve fraud detection.",
-
-"fraud_use":
-"It identifies complex fraud patterns in transaction data."
-}
-}
-
-info = model_explanations[model_name]
-
-st.write("**Definition:**", info["definition"])
-st.write("**Use Case:**", info["use_case"])
-st.write("**Simple Analogy:**", info["analogy"])
-st.write("**Application in Fraud Detection:**", info["fraud_use"])
-
-
-# --------------------------------------------------
-# REMOVE LEAKAGE FEATURES
+# REMOVE LEAKAGE
 # --------------------------------------------------
 
 df = df.drop(columns=[
@@ -218,7 +116,9 @@ df = df.drop(columns=[
 # --------------------------------------------------
 
 df["high_amount_flag"] = (df["amount"] > df["amount"].median()).astype(int)
+
 df["night_transaction"] = ((df["hour"] < 6) | (df["hour"] > 22)).astype(int)
+
 df["international_transaction"] = (df["country"] != "US").astype(int)
 
 
@@ -235,21 +135,31 @@ X = pd.get_dummies(X, drop_first=True)
 
 
 # --------------------------------------------------
-# TRAIN TEST SPLIT
+# TRAIN TEST SPLIT (SAFE)
 # --------------------------------------------------
 
-# Check if both classes exist
-if len(y.unique()) > 1:
+try:
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=0.25,
-        random_state=42,
-        stratify=y
-    )
+    if len(y.unique()) > 1:
 
-else:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X,
+            y,
+            test_size=0.25,
+            random_state=42,
+            stratify=y
+        )
+
+    else:
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X,
+            y,
+            test_size=0.25,
+            random_state=42
+        )
+
+except:
 
     X_train, X_test, y_train, y_test = train_test_split(
         X,
@@ -270,7 +180,7 @@ X_test_scaled = scaler.transform(X_test)
 
 
 # --------------------------------------------------
-# MODEL SELECTION
+# MODELS
 # --------------------------------------------------
 
 models = {
@@ -292,36 +202,37 @@ model = models[model_name]
 if model_name in ["Logistic Regression","KNN","Naive Bayes"]:
 
     model.fit(X_train_scaled, y_train)
+
     y_pred = model.predict(X_test_scaled)
-    y_prob = model.predict_proba(X_test_scaled)[:,1]
+
+    if hasattr(model, "predict_proba"):
+        y_prob = model.predict_proba(X_test_scaled)[:,1]
+    else:
+        y_prob = y_pred
 
 else:
 
     model.fit(X_train, y_train)
+
     y_pred = model.predict(X_test)
-    y_prob = model.predict_proba(X_test)[:,1]
+
+    if hasattr(model, "predict_proba"):
+        y_prob = model.predict_proba(X_test)[:,1]
+    else:
+        y_prob = y_pred
 
 
 # --------------------------------------------------
-# METRICS (robust for small datasets)
+# METRICS (ROBUST)
 # --------------------------------------------------
 
 accuracy = accuracy_score(y_test, y_pred)
 
-try:
-    precision = precision_score(y_test, y_pred, zero_division=0)
-except:
-    precision = 0
+precision = precision_score(y_test, y_pred, zero_division=0)
 
-try:
-    recall = recall_score(y_test, y_pred, zero_division=0)
-except:
-    recall = 0
+recall = recall_score(y_test, y_pred, zero_division=0)
 
-try:
-    f1 = f1_score(y_test, y_pred, zero_division=0)
-except:
-    f1 = 0
+f1 = f1_score(y_test, y_pred, zero_division=0)
 
 try:
     if len(np.unique(y_test)) > 1:
@@ -335,6 +246,23 @@ try:
     mcc = matthews_corrcoef(y_test, y_pred)
 except:
     mcc = 0
+
+
+# --------------------------------------------------
+# DISPLAY METRICS
+# --------------------------------------------------
+
+st.subheader("📊 Model Performance")
+
+c1, c2, c3 = st.columns(3)
+
+c1.metric("Accuracy", round(accuracy,4))
+c2.metric("Precision", round(precision,4))
+c3.metric("F1 Score", round(f1,4))
+
+c1.metric("AUC", round(auc,4))
+c2.metric("Recall", round(recall,4))
+c3.metric("MCC", round(mcc,4))
 
 
 # --------------------------------------------------
@@ -356,32 +284,28 @@ st.pyplot(fig)
 # SHAP EXPLAINABILITY
 # --------------------------------------------------
 
-st.subheader("")
+st.subheader("Explainable AI – SHAP Feature Impact")
 
-if model_name in ["Random Forest", "Decision Tree", "XGBoost"]:
+try:
 
-    try:
+    if model_name == "XGBoost":
+        explainer = shap.TreeExplainer(model.get_booster())
 
-        # Fix specifically for XGBoost
-        if model_name == "XGBoost":
-            explainer = shap.TreeExplainer(model.get_booster())
-        else:
-            explainer = shap.TreeExplainer(model)
+    elif model_name in ["Random Forest", "Decision Tree"]:
+        explainer = shap.TreeExplainer(model)
 
-        shap_values = explainer.shap_values(X_test)
+    else:
+        st.info("SHAP explanation is best supported for tree-based models.")
+        st.stop()
 
-        fig_shap = plt.figure()
-        shap.summary_plot(shap_values, X_test, show=False)
+    shap_values = explainer.shap_values(X_test)
 
-        st.pyplot(fig_shap)
+    fig = plt.figure()
 
-    except Exception as e:
-        st.warning("SHAP explanation could not be generated for this model.")
+    shap.summary_plot(shap_values, X_test, show=False)
 
-else:
+    st.pyplot(fig)
 
-    st.info("SHAP explanation is best supported for tree-based models.")
+except:
 
-
-
-
+    st.warning("SHAP explanation could not be generated for this dataset.")
