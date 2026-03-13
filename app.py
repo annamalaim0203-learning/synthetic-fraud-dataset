@@ -238,13 +238,25 @@ X = pd.get_dummies(X, drop_first=True)
 # TRAIN TEST SPLIT
 # --------------------------------------------------
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.25,
-    random_state=42,
-    stratify=y
-)
+# Check if both classes exist
+if len(y.unique()) > 1:
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.25,
+        random_state=42,
+        stratify=y
+    )
+
+else:
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.25,
+        random_state=42
+    )
 
 
 # --------------------------------------------------
@@ -358,5 +370,6 @@ if model_name in ["Random Forest", "Decision Tree", "XGBoost"]:
 else:
 
     st.info("SHAP explanation is best supported for tree-based models.")
+
 
 
