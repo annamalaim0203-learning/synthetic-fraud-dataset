@@ -335,16 +335,27 @@ st.pyplot(fig)
 
 st.subheader("Explainable AI – SHAP Feature Impact")
 
-if model_name in ["Random Forest","Decision Tree","XGBoost"]:
+if model_name in ["Random Forest", "Decision Tree", "XGBoost"]:
 
-    explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(X_test)
+    try:
 
-    fig_shap = plt.figure()
-    shap.summary_plot(shap_values, X_test, show=False)
+        # Fix specifically for XGBoost
+        if model_name == "XGBoost":
+            explainer = shap.TreeExplainer(model.get_booster())
+        else:
+            explainer = shap.TreeExplainer(model)
 
-    st.pyplot(fig_shap)
+        shap_values = explainer.shap_values(X_test)
+
+        fig_shap = plt.figure()
+        shap.summary_plot(shap_values, X_test, show=False)
+
+        st.pyplot(fig_shap)
+
+    except Exception as e:
+        st.warning("SHAP explanation could not be generated for this model.")
 
 else:
 
     st.info("SHAP explanation is best supported for tree-based models.")
+
