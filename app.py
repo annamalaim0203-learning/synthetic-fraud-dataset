@@ -3,16 +3,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import requests
 import shap
+import requests
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import (
-    accuracy_score, roc_auc_score, precision_score,
-    recall_score, f1_score, matthews_corrcoef,
-    confusion_matrix
-)
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, matthews_corrcoef, confusion_matrix
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
@@ -33,23 +29,12 @@ st.markdown("### Fraud Detection with Explainable AI (SHAP)")
 
 
 # --------------------------------------------------
-# DATASET DOWNLOAD
+# LOAD TRAINING DATASET FROM GITHUB
 # --------------------------------------------------
 
-st.subheader("🐙 Dataset Access – GitHub")
+GITHUB_DATASET = "https://raw.githubusercontent.com/annamalaim0203-learning/synthetic-fraud-dataset/main/synthetic_fraud_dataset.csv"
 
-url = "https://raw.githubusercontent.com/annamalaim0203-learning/synthetic-fraud-dataset/main/synthetic_fraud_dataset.csv"
-
-response = requests.get(url)
-
-st.download_button(
-    label="Download Fraud Dataset",
-    data=response.content,
-    file_name="synthetic_fraud_dataset.csv",
-    mime="text/csv"
-)
-
-st.markdown("---")
+train_df = pd.read_csv(GITHUB_DATASET)
 
 
 # --------------------------------------------------
@@ -59,7 +44,7 @@ st.markdown("---")
 st.sidebar.header("Controls")
 
 uploaded_file = st.sidebar.file_uploader(
-    "Upload Fraud Dataset",
+    "Upload Test Dataset",
     type=["csv"]
 )
 
@@ -76,34 +61,33 @@ model_name = st.sidebar.selectbox(
 )
 
 if uploaded_file is None:
-    st.info("Upload dataset to continue.")
+    st.info("Upload sample dataset to test the model.")
     st.stop()
 
-df = pd.read_csv(uploaded_file)
+test_df = pd.read_csv(uploaded_file)
 
 
 # --------------------------------------------------
-# DATASET OVERVIEW
+# DATASET PREVIEW
 # --------------------------------------------------
 
-st.subheader("Dataset Overview")
+st.subheader("Test Dataset Overview")
 
-summary = pd.DataFrame({
-    "Attribute": ["Rows", "Columns", "Target"],
-    "Value": [df.shape[0], df.shape[1], "is_fraud"]
-})
-
-st.table(summary)
-
-st.write("Sample Records")
-st.dataframe(df.head())
+st.dataframe(test_df.head())
 
 
 # --------------------------------------------------
-# REMOVE LEAKAGE
+# REMOVE LEAKAGE FEATURES
 # --------------------------------------------------
 
-df = df.drop(columns=[
+train_df = train_df.drop(columns=[
+    "transaction_id",
+    "user_id",
+    "device_risk_score",
+    "ip_risk_score"
+], errors="ignore")
+
+test_df = test_df.drop(columns=[
     "transaction_id",
     "user_id",
     "device_risk_score",
@@ -115,11 +99,13 @@ df = df.drop(columns=[
 # FEATURE ENGINEERING
 # --------------------------------------------------
 
-df["high_amount_flag"] = (df["amount"] > df["amount"].median()).astype(int)
+for df in [train_df, test_df]:
 
-df["night_transaction"] = ((df["hour"] < 6) | (df["hour"] > 22)).astype(int)
+    df["high_amount_flag"] = (df["amount"] > df["amount"].median()).astype(int)
 
-df["international_transaction"] = (df["country"] != "US").astype(int)
+    df["night_transaction"] = ((df["hour"] < 6) | (df["hour"] > 22)).astype(int)
+
+    df["international_transaction"] = (df["country"] != "US").astype(int)
 
 
 # --------------------------------------------------
@@ -128,45 +114,16 @@ df["international_transaction"] = (df["country"] != "US").astype(int)
 
 target = "is_fraud"
 
-X = df.drop(target, axis=1)
-y = df[target]
+X_train = train_df.drop(target, axis=1)
+y_train = train_df[target]
 
-X = pd.get_dummies(X, drop_first=True)
+X_test = test_df.drop(target, axis=1)
+y_test = test_df[target]
 
+X_train = pd.get_dummies(X_train, drop_first=True)
+X_test = pd.get_dummies(X_test, drop_first=True)
 
-# --------------------------------------------------
-# TRAIN TEST SPLIT (SAFE)
-# --------------------------------------------------
-
-try:
-
-    if len(y.unique()) > 1:
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X,
-            y,
-            test_size=0.25,
-            random_state=42,
-            stratify=y
-        )
-
-    else:
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X,
-            y,
-            test_size=0.25,
-            random_state=42
-        )
-
-except:
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=0.25,
-        random_state=42
-    )
+X_test = X_test.reindex(columns=X_train.columns, fill_value=0)
 
 
 # --------------------------------------------------
@@ -184,12 +141,19 @@ X_test_scaled = scaler.transform(X_test)
 # --------------------------------------------------
 
 models = {
+
 "Logistic Regression": LogisticRegression(max_iter=1000),
+
 "Decision Tree": DecisionTreeClassifier(),
+
 "KNN": KNeighborsClassifier(),
+
 "Naive Bayes": GaussianNB(),
+
 "Random Forest": RandomForestClassifier(),
+
 "XGBoost": XGBClassifier(eval_metric="logloss")
+
 }
 
 model = models[model_name]
@@ -205,10 +169,7 @@ if model_name in ["Logistic Regression","KNN","Naive Bayes"]:
 
     y_pred = model.predict(X_test_scaled)
 
-    if hasattr(model, "predict_proba"):
-        y_prob = model.predict_proba(X_test_scaled)[:,1]
-    else:
-        y_prob = y_pred
+    y_prob = model.predict_proba(X_test_scaled)[:,1]
 
 else:
 
@@ -216,14 +177,11 @@ else:
 
     y_pred = model.predict(X_test)
 
-    if hasattr(model, "predict_proba"):
-        y_prob = model.predict_proba(X_test)[:,1]
-    else:
-        y_prob = y_pred
+    y_prob = model.predict_proba(X_test)[:,1]
 
 
 # --------------------------------------------------
-# METRICS (ROBUST)
+# METRICS
 # --------------------------------------------------
 
 accuracy = accuracy_score(y_test, y_pred)
@@ -234,18 +192,9 @@ recall = recall_score(y_test, y_pred, zero_division=0)
 
 f1 = f1_score(y_test, y_pred, zero_division=0)
 
-try:
-    if len(np.unique(y_test)) > 1:
-        auc = roc_auc_score(y_test, y_prob)
-    else:
-        auc = 0
-except:
-    auc = 0
+auc = roc_auc_score(y_test, y_prob)
 
-try:
-    mcc = matthews_corrcoef(y_test, y_pred)
-except:
-    mcc = 0
+mcc = matthews_corrcoef(y_test, y_pred)
 
 
 # --------------------------------------------------
@@ -257,11 +206,15 @@ st.subheader("📊 Model Performance")
 c1, c2, c3 = st.columns(3)
 
 c1.metric("Accuracy", round(accuracy,4))
+
 c2.metric("Precision", round(precision,4))
+
 c3.metric("F1 Score", round(f1,4))
 
 c1.metric("AUC", round(auc,4))
+
 c2.metric("Recall", round(recall,4))
+
 c3.metric("MCC", round(mcc,4))
 
 
@@ -291,11 +244,11 @@ try:
     if model_name == "XGBoost":
         explainer = shap.TreeExplainer(model.get_booster())
 
-    elif model_name in ["Random Forest", "Decision Tree"]:
+    elif model_name in ["Random Forest","Decision Tree"]:
         explainer = shap.TreeExplainer(model)
 
     else:
-        st.info("SHAP explanation is best supported for tree-based models.")
+        st.info("SHAP explanation available for tree models.")
         st.stop()
 
     shap_values = explainer.shap_values(X_test)
@@ -308,4 +261,4 @@ try:
 
 except:
 
-    st.warning("SHAP explanation could not be generated for this dataset.")
+    st.warning("SHAP explanation could not be generated.")
