@@ -444,6 +444,106 @@ Machine learning helps banks **detect suspicious activity quickly and automatica
 
 ---
 
+# Explainability, Privacy, and Fairness in the Model
+
+## 1. Explainability
+
+**What it means**
+
+Explainability refers to the ability to understand **why a machine learning model made a particular decision**.
+
+**How it is used in this project**
+
+In this project, Explainable AI is implemented using **SHAP (SHapley Additive Explanations)**. SHAP helps identify which features influenced the fraud prediction and how strongly they contributed to the model’s decision.
+
+This allows users to understand:
+
+- Which transaction attributes influenced fraud detection  
+- How each feature contributed to the prediction  
+- Why the model classified a transaction as fraudulent  
+
+This improves **transparency and trust**, which is especially important in financial systems.
+
+**Simple Analogy**
+
+Imagine a **bank officer rejecting a loan application**.  
+Instead of simply saying *"Loan rejected"*, the officer explains:
+
+- Credit score is low  
+- Income is insufficient  
+- Existing debts are high  
+
+SHAP performs a similar role by explaining **why the model flagged a transaction as fraud**.
+
+---
+
+## 2. Privacy
+
+**What it means**
+
+Privacy refers to protecting **sensitive personal information** while using data for machine learning.
+
+**How it is used in this project**
+
+To maintain privacy, the model does not rely on personal identifiers. The following columns were removed before training:
+
+- transaction_id  
+- user_id  
+
+The model instead focuses on **behavioral patterns**, such as:
+
+- transaction amount  
+- transaction type  
+- country  
+- time of transaction  
+
+This ensures the model detects fraud **without exposing personal identity**.
+
+**Simple Analogy**
+
+Imagine a **bank analyst reviewing suspicious transactions**.
+
+Instead of seeing the customer's name, the analyst only sees:
+
+- transaction amount  
+- location  
+- time of transaction  
+
+The analyst can still detect suspicious activity **without knowing who the person is**, protecting customer privacy.
+
+---
+
+## 3. Fairness
+
+**What it means**
+
+Fairness ensures that machine learning models **do not make biased or discriminatory decisions**.
+
+**How it is used in this project**
+
+The fraud detection model uses **transaction behavior features** rather than personal attributes. The model evaluates patterns such as:
+
+- transaction amount  
+- merchant category  
+- device risk score  
+- transaction timing  
+
+Sensitive attributes like **gender, race, or religion** are not included in the dataset. This reduces the risk of biased predictions.
+
+**Simple Analogy**
+
+Imagine **airport security screening passengers**.
+
+A fair system checks:
+
+- suspicious behavior  
+- unusual travel patterns  
+- baggage activity  
+
+Instead of judging someone based on **appearance or nationality**.
+
+Similarly, this fraud detection model focuses only on **transaction behavior**, ensuring fair predictions.
+
 # 📌 Conclusion
 
 This project demonstrates how machine learning algorithms can be applied to fraud detection in the financial domain.
